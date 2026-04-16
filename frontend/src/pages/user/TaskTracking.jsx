@@ -150,9 +150,8 @@ export default function TaskTracking() {
     }
   }, [task, mapReady]);
 
-  // Watch user's current position — wait for map to be ready
+  // Watch user's current position — starts immediately, independent of map
   useEffect(() => {
-    if (!mapReady || !mapInstanceRef.current) return;
     if (!navigator.geolocation) {
       toast.error(t('tracking.geolocationNotSupported'));
       return;
@@ -160,31 +159,7 @@ export default function TaskTracking() {
 
     const watcher = navigator.geolocation.watchPosition(
       (pos) => {
-        const newPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setCurrentPos(newPos);
-
-        // Update user marker on map
-        const myInitials = getInitials(user.name, user.lastName);
-        if (!userMarkerRef.current) {
-          userMarkerRef.current = new window.google.maps.Marker({
-            position: newPos,
-            map: mapInstanceRef.current,
-            icon: createInitialsMarkerIcon(myInitials, '#4285F4'),
-            title: `${user.name} ${user.lastName}`,
-            zIndex: 999,
-          });
-        } else {
-          userMarkerRef.current.setPosition(newPos);
-        }
-
-        // Check if inside area
-        if (polygonRef.current && window.google?.maps?.geometry) {
-          const inside = window.google.maps.geometry.poly.containsLocation(
-            new window.google.maps.LatLng(newPos.lat, newPos.lng),
-            polygonRef.current
-          );
-          setInsideArea(inside);
-        }
+        setCurrentPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
       (err) => {
         console.error('Geolocation error:', err);
@@ -194,14 +169,35 @@ export default function TaskTracking() {
     );
 
     watchIdRef.current = watcher;
-    return () => {
-      navigator.geolocation.clearWatch(watcher);
-      if (userMarkerRef.current) {
-        userMarkerRef.current.setMap(null);
-        userMarkerRef.current = null;
-      }
-    };
-  }, [mapReady]);
+    return () => navigator.geolocation.clearWatch(watcher);
+  }, []);
+
+  // Place/update user marker and check inside-area when position or map changes
+  useEffect(() => {
+    if (!currentPos || !mapReady || !mapInstanceRef.current) return;
+
+    const myInitials = getInitials(user.name, user.lastName);
+    if (!userMarkerRef.current) {
+      userMarkerRef.current = new window.google.maps.Marker({
+        position: currentPos,
+        map: mapInstanceRef.current,
+        icon: createInitialsMarkerIcon(myInitials, '#4285F4'),
+        title: `${user.name} ${user.lastName}`,
+        zIndex: 999,
+      });
+    } else {
+      userMarkerRef.current.setPosition(currentPos);
+    }
+
+    // Check if inside area
+    if (polygonRef.current && window.google?.maps?.geometry) {
+      const inside = window.google.maps.geometry.poly.containsLocation(
+        new window.google.maps.LatLng(currentPos.lat, currentPos.lng),
+        polygonRef.current
+      );
+      setInsideArea(inside);
+    }
+  }, [currentPos, mapReady]);
 
   // Handle pause/resume based on area boundary
   useEffect(() => {
