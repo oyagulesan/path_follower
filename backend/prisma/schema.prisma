@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+model User {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  name        String
+  lastName    String
+  telephone   String
+  password    String
+  role        Role     @default(USER)
+  createdAt   DateTime @default(now())
+
+  assignments     TaskAssignment[]
+  trackingSessions TrackingSession[]
+}
+
+model Task {
+  id        String   @id @default(uuid())
+  title     String
+  area      Json
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime @default(now())
+
+  assignments      TaskAssignment[]
+  trackingSessions TrackingSession[]
+}
+
+model TaskAssignment {
+  id     String @id @default(uuid())
+  taskId String
+  userId String
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+}
+
+model TrackingSession {
+  id        String    @id @default(uuid())
+  taskId    String
+  userId    String
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  points LocationPoint[]
+}
+
+model LocationPoint {
+  id        String   @id @default(uuid())
+  sessionId String
+  lat       Float
+  lng       Float
+  timestamp DateTime @default(now())
+
+  session TrackingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+}
