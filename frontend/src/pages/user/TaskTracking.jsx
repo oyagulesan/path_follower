@@ -64,13 +64,25 @@ export default function TaskTracking() {
       if (data) {
         activeSessionIdRef.current = data.id;
         setTracking(true);
-        // Store existing points so live polyline can show them
         if (data.points && data.points.length > 0) {
           livePathRef.current = data.points.map((p) => ({ lat: p.lat, lng: p.lng }));
         }
       }
     });
   }, [taskId]);
+
+  // Fetch all currently active users for this task on load
+  useEffect(() => {
+    api.get(`/tasks/${taskId}/active-users`).then(({ data }) => {
+      const others = {};
+      data.forEach((u) => {
+        if (u.userId !== user.id && u.lat != null) {
+          others[u.userId] = u;
+        }
+      });
+      setActiveUsers(others);
+    });
+  }, [taskId, user.id]);
 
   // Initialize map
   const initMap = useCallback(() => {
@@ -208,6 +220,27 @@ export default function TaskTracking() {
     }
   }, [currentPos, mapReady]);
 
+  // Place/update markers for other active users when map is ready or activeUsers changes
+  useEffect(() => {
+    if (!mapReady || !mapInstanceRef.current) return;
+
+    Object.values(activeUsers).forEach((u) => {
+      if (u.lat == null || u.lng == null) return;
+      const initials = getInitials(u.name, u.lastName);
+      const fullName = `${u.name} ${u.lastName}`;
+      if (!activeMarkerRefs.current[u.userId]) {
+        activeMarkerRefs.current[u.userId] = new window.google.maps.Marker({
+          position: { lat: u.lat, lng: u.lng },
+          map: mapInstanceRef.current,
+          icon: createInitialsMarkerIcon(initials, '#FF4136'),
+          title: fullName,
+        });
+      } else {
+        activeMarkerRefs.current[u.userId].setPosition({ lat: u.lat, lng: u.lng });
+      }
+    });
+  }, [activeUsers, mapReady]);
+
   // Handle pause/resume based on area boundary
   useEffect(() => {
     if (!tracking) return;
@@ -268,22 +301,6 @@ export default function TaskTracking() {
         ...prev,
         [data.userId]: { ...data },
       }));
-
-      // Update marker on map
-      if (mapInstanceRef.current) {
-        const initials = getInitials(data.name, data.lastName);
-        const fullName = `${data.name} ${data.lastName}`;
-        if (!activeMarkerRefs.current[data.userId]) {
-          activeMarkerRefs.current[data.userId] = new window.google.maps.Marker({
-            position: { lat: data.lat, lng: data.lng },
-            map: mapInstanceRef.current,
-            icon: createInitialsMarkerIcon(initials, '#FF4136'),
-            title: fullName,
-          });
-        } else {
-          activeMarkerRefs.current[data.userId].setPosition({ lat: data.lat, lng: data.lng });
-        }
-      }
     });
 
     socket.on('tracking:user-ended', (data) => {

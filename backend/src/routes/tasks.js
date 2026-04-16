@@ -78,6 +78,35 @@ router.get('/:id', async (req, res) => {
   res.json(task);
 });
 
+// Get all active tracking sessions for a task (users who started and haven't stopped)
+router.get('/:id/active-users', async (req, res) => {
+  const prisma = req.app.locals.prisma;
+
+  const sessions = await prisma.trackingSession.findMany({
+    where: {
+      taskId: req.params.id,
+      endedAt: null,
+    },
+    include: {
+      user: { select: { id: true, userId: true, name: true, lastName: true } },
+      points: { orderBy: { timestamp: 'desc' }, take: 1 },
+    },
+  });
+
+  const activeUsers = sessions.map((s) => ({
+    sessionId: s.id,
+    userId: s.user.id,
+    userName: s.user.userId,
+    name: s.user.name,
+    lastName: s.user.lastName,
+    lat: s.points[0]?.lat ?? null,
+    lng: s.points[0]?.lng ?? null,
+    timestamp: s.points[0]?.timestamp ?? s.startedAt,
+  }));
+
+  res.json(activeUsers);
+});
+
 // Get active tracking session for current user on a task
 router.get('/:id/active-session', async (req, res) => {
   const prisma = req.app.locals.prisma;
