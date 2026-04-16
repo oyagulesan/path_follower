@@ -86,21 +86,30 @@ export default function TaskTracking() {
   }, []);
 
   useEffect(() => {
+    if (!task) return; // map div not in DOM until task loads
+
     if (window.google?.maps) {
       initMap();
       return;
     }
     const existing = document.querySelector('script[src*="maps.googleapis.com"]');
     if (existing) {
-      existing.addEventListener('load', initMap);
+      if (existing.dataset.loaded) {
+        initMap();
+      } else {
+        existing.addEventListener('load', initMap);
+      }
       return;
     }
     const script = document.createElement('script');
     script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&libraries=drawing,geometry`;
     script.async = true;
-    script.onload = initMap;
+    script.onload = () => {
+      script.dataset.loaded = 'true';
+      initMap();
+    };
     document.head.appendChild(script);
-  }, [initMap]);
+  }, [initMap, task]);
 
   // Draw task area polygon and recorded paths when task loads AND map is ready
   useEffect(() => {
